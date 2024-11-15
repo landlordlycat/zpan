@@ -21,7 +21,7 @@ func (s *Share) Create(share *model.Share) error {
 }
 
 func (s *Share) Update(id int64, share *model.Share) error {
-	if err := gdb.First(&model.Storage{}, id).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := gdb.First(&model.Share{}, id).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("share not found")
 	}
 
@@ -37,7 +37,7 @@ func (s *Share) FindAll(uid int64) (list []*model.Share, total int64, err error)
 	query.WithEq("uid", uid)
 	sn := gdb.Where(query.SQL(), query.Params)
 	sn.Model(model.Share{}).Count(&total)
-	err = sn.Find(&list).Offset(query.Offset).Limit(query.Limit).Error
+	err = sn.Order("id desc").Find(&list).Offset(query.Offset).Limit(query.Limit).Error
 	return
 }
 

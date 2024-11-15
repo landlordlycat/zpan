@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/saltbo/gopkg/ginutil"
-
+	"github.com/saltbo/zpan/internal/app/usecase/authz"
 	_ "github.com/saltbo/zpan/internal/docs"
 )
 
@@ -25,18 +25,19 @@ import (
 // @license.name GPL 3.0
 // @license.url https://github.com/saltbo/zpan/blob/master/LICENSE
 
-func SetupRoutes(ge *gin.Engine) {
+func SetupRoutes(ge *gin.Engine, repository *Repository) {
 	ginutil.SetupSwagger(ge)
 
 	apiRouter := ge.Group("/api")
+	apiRouter.Use(authz.NewMiddleware)
 	ginutil.SetupResource(apiRouter,
-		NewOptionResource(),
-		NewUserResource(),
-		NewUserKeyResource(),
-		NewTokenResource(),
-		NewStorageResource(),
-		NewFileResource(),
-		NewShareResource(),
-		NewRecycleBinResource(),
+		repository.option,
+		repository.file,
+		repository.storage,
+		repository.share,
+		repository.token,
+		repository.user,
+		repository.userKey,
+		repository.recycleBin,
 	)
 }

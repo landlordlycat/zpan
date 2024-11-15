@@ -10,7 +10,8 @@ import (
 	"github.com/saltbo/gopkg/ginutil"
 	"github.com/saltbo/gopkg/jwtutil"
 	"github.com/saltbo/gopkg/strutil"
-	"github.com/saltbo/zpan/internal/pkg/fakefs"
+	"github.com/saltbo/zpan/internal/app/repo"
+	"github.com/saltbo/zpan/internal/app/usecase/vfs"
 	"gorm.io/gorm"
 
 	"github.com/saltbo/zpan/internal/app/dao"
@@ -24,16 +25,16 @@ const ShareCookieTokenKey = "share-token"
 type ShareResource struct {
 	jwtutil.JWTUtil
 
-	fs      *fakefs.FakeFS
 	dShare  *dao.Share
-	dMatter *dao.Matter
+	dMatter repo.Matter
+	vfs     vfs.VirtualFs
 }
 
-func NewShareResource() ginutil.Resource {
+func NewShareResource(dMatter repo.Matter, vfs vfs.VirtualFs) *ShareResource {
 	return &ShareResource{
-		fs:      fakefs.New(),
 		dShare:  dao.NewShare(),
-		dMatter: dao.NewMatter(),
+		dMatter: dMatter,
+		vfs:     vfs,
 	}
 }
 
@@ -44,9 +45,10 @@ func (rs *ShareResource) Register(router *gin.RouterGroup) {
 	router.PATCH("/shares/:alias", rs.update)
 	router.DELETE("/shares/:alias", rs.delete)
 
-	router.POST("/shares/:alias/token", rs.draw)
-	router.GET("/shares/:alias/matter", rs.findMatter)
+	router.POST("/shares/:alias/token", rs.withdrawal)
+	router.GET("/shares/:alias/matter", rs.findShareMatter)
 	router.GET("/shares/:alias/matters", rs.findMatters)
+	router.GET("/shares/:alias/matters/:mAlias", rs.findMatter)
 }
 
 func (rs *ShareResource) find(c *gin.Context) {
@@ -86,7 +88,7 @@ func (rs *ShareResource) create(c *gin.Context) {
 		return
 	}
 
-	mMatter, err := rs.dMatter.Find(p.Matter)
+	mMatter, err := rs.dMatter.FindByAlias(c, p.Matter)
 	if err != nil {
 		ginutil.JSONBadRequest(c, err)
 		return
@@ -151,7 +153,7 @@ func (rs *ShareResource) delete(c *gin.Context) {
 	ginutil.JSON(c)
 }
 
-func (rs *ShareResource) draw(c *gin.Context) {
+func (rs *ShareResource) withdrawal(c *gin.Context) {
 	p := new(bind.BodyShareDraw)
 	if err := c.ShouldBindJSON(p); err != nil {
 		ginutil.JSONBadRequest(c, err)
@@ -183,6 +185,27 @@ func (rs *ShareResource) draw(c *gin.Context) {
 	ginutil.JSON(c)
 }
 
+func (rs *ShareResource) findShareMatter(c *gin.Context) {
+	share, err := rs.dShare.FindByAlias(c.Param("alias"))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		ginutil.JSONBadRequest(c, fmt.Errorf("share not exist"))
+		return
+	}
+
+	if err := rs.shareTokenVerify(c, share); err != nil {
+		ginutil.JSONBadRequest(c, err)
+		return
+	}
+
+	mMatter, err := rs.dMatter.FindByAlias(c, share.Matter)
+	if err != nil {
+		ginutil.JSONServerError(c, err)
+		return
+	}
+
+	ginutil.JSONData(c, mMatter)
+}
+
 func (rs *ShareResource) findMatter(c *gin.Context) {
 	share, err := rs.dShare.FindByAlias(c.Param("alias"))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -195,7 +218,7 @@ func (rs *ShareResource) findMatter(c *gin.Context) {
 		return
 	}
 
-	mMatter, err := rs.fs.GetFileInfo(share.Uid, share.Matter)
+	mMatter, err := rs.vfs.Get(c, c.Param("mAlias"))
 	if err != nil {
 		ginutil.JSONServerError(c, err)
 		return
@@ -222,19 +245,18 @@ func (rs *ShareResource) findMatters(c *gin.Context) {
 		return
 	}
 
-	mMatter, err := rs.dMatter.Find(share.Matter)
+	mMatter, err := rs.dMatter.FindByAlias(c, share.Matter)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		ginutil.JSONBadRequest(c, fmt.Errorf("matter not found"))
 		return
 	}
 
 	dir := fmt.Sprintf("%s%s", mMatter.FullPath(), p.Dir) // 设置父级目录
-	query := dao.NewQuery()
-	query.WithEq("uid", mMatter.Uid)
-	query.WithEq("parent", dir)
-	query.Offset = p.Offset
-	query.Limit = p.Limit
-	list, total, err := rs.dMatter.FindAll(query)
+	list, total, err := rs.dMatter.FindAll(c, &repo.MatterListOption{
+		QueryPage: repo.QueryPage{Offset: p.Offset, Limit: p.Limit},
+		Uid:       mMatter.Uid,
+		Dir:       dir,
+	})
 	if err != nil {
 		ginutil.JSONServerError(c, err)
 		return

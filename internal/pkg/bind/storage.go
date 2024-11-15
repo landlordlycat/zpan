@@ -3,7 +3,7 @@ package bind
 import (
 	"strings"
 
-	"github.com/saltbo/zpan/internal/app/model"
+	"github.com/saltbo/zpan/internal/app/entity"
 )
 
 var ts = strings.TrimSpace
@@ -17,6 +17,7 @@ type StorageBody struct {
 	Region     string `json:"region"`
 	AccessKey  string `json:"access_key" binding:"required"`
 	SecretKey  string `json:"secret_key" binding:"required"`
+	PathStyle  bool   `json:"path_style"`
 	Title      string `json:"title"`
 	Status     int8   `json:"status"`
 	IDirs      string `json:"idirs"` // internal dirs
@@ -26,19 +27,20 @@ type StorageBody struct {
 	PublicRead bool   `json:"public_read"`
 }
 
-func (b *StorageBody) Model() *model.Storage {
+func (b *StorageBody) Model() *entity.Storage {
 	title := b.Title
 	if title == "" {
 		title = b.Name
 	}
 
-	return &model.Storage{
+	return &entity.Storage{
 		Mode:       b.Mode,
 		Name:       ts(b.Name),
 		Title:      ts(title),
 		IDirs:      ts(b.IDirs),
 		Bucket:     ts(b.Bucket),
 		Provider:   b.Provider,
+		PathStyle:  b.PathStyle,
 		Endpoint:   ts(b.Endpoint),
 		Region:     ts(b.Region),
 		Status:     b.Status,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/saltbo/gopkg/regexputil"
 	"github.com/saltbo/gopkg/strutil"
+	"github.com/saltbo/zpan/internal/app/entity"
 
 	"github.com/saltbo/zpan/internal/app/dao"
 	"github.com/saltbo/zpan/internal/app/model"
@@ -74,7 +75,7 @@ func (u *User) Active(token string) error {
 		return fmt.Errorf("account already activated")
 	}
 
-	u.dUser.UpdateStorage(uid, model.UserStorageActiveSize) // 激活即送1G空间
+	u.dUser.UpdateStorage(uid, entity.UserStorageActiveSize) // 激活即送1G空间
 	return u.dUser.Activate(uid)
 }
 
@@ -111,6 +112,8 @@ func (u *User) PasswordUpdate(uid int64, oldPwd, newPwd string) error {
 		return err
 	} else if user.Password != strutil.Md5Hex(oldPwd) {
 		return fmt.Errorf("error password")
+	} else if user.Username == "demo" {
+		return fmt.Errorf("user demo not allowed change password")
 	}
 
 	user.Password = strutil.Md5Hex(newPwd)

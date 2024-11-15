@@ -1,6 +1,10 @@
 package dao
 
 import (
+	"log"
+
+	"github.com/saltbo/zpan/internal/app/repo/query"
+	"github.com/spf13/viper"
 	"gorm.io/gorm"
 
 	"github.com/saltbo/zpan/internal/app/model"
@@ -31,6 +35,21 @@ func Init(driver, dsn string) error {
 	return nil
 }
 
-func Transaction(fc func(tx *gorm.DB) error) error {
-	return gdb.Transaction(fc)
+type DBQueryFactory struct {
+}
+
+func NewDBQueryFactory() *DBQueryFactory {
+	if !viper.IsSet("installed") {
+		return nil
+	}
+
+	if err := Init(viper.GetString("database.driver"), viper.GetString("database.dsn")); err != nil {
+		log.Fatalln(err)
+	}
+
+	return &DBQueryFactory{}
+}
+
+func (D *DBQueryFactory) Q() *query.Query {
+	return query.Use(gdb)
 }
